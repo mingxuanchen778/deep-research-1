@@ -14,6 +14,11 @@ const openai = process.env.OPENAI_KEY
   ? createOpenAI({
       apiKey: process.env.OPENAI_KEY,
       baseURL: process.env.OPENAI_ENDPOINT || 'https://api.openai.com/v1',
+      // 添加 OpenRouter API 所需的请求头
+      headers: {
+        'HTTP-Referer': 'https://edurora.com',
+        'X-Title': 'Edurora'
+      },
     })
   : undefined;
 
@@ -43,12 +48,17 @@ const deepSeekR1Model = fireworks
     })
   : undefined;
 
+const qwq32bModel = openai?.('qwen/qwq-32b:free', {
+  reasoningEffort: 'medium',
+  structuredOutputs: true,
+});
+
 export function getModel(): LanguageModelV1 {
   if (customModel) {
     return customModel;
   }
 
-  const model = deepSeekR1Model ?? o3MiniModel;
+  const model = deepSeekR1Model ?? o3MiniModel ?? qwq32bModel;
   if (!model) {
     throw new Error('No model found');
   }
