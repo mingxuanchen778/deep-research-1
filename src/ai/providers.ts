@@ -29,7 +29,9 @@ const fireworks = process.env.FIREWORKS_KEY
   : undefined;
 
 const customModel = process.env.CUSTOM_MODEL
-  ? openai?.(process.env.CUSTOM_MODEL)
+  ? openai?.(process.env.CUSTOM_MODEL, {
+      structuredOutputs: true,
+    })
   : undefined;
 
 // Models

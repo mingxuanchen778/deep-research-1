@@ -27,7 +27,7 @@ type ResearchResult = {
 };
 
 // increase this if you have higher API rate limits
-const ConcurrencyLimit = 2;
+const ConcurrencyLimit = Number(process.env.FIRECRAWL_CONCURRENCY) || 2;
 
 // Initialize Firecrawl with optional API key and optional base url
 
@@ -89,8 +89,8 @@ async function processSerpResult({
   numLearnings?: number;
   numFollowUpQuestions?: number;
 }) {
-  const contents = compact(result.data.map(item => item.markdown)).map(
-    content => trimPrompt(content, 25_000),
+  const contents = compact(result.data.map(item => item.markdown)).map(content =>
+    trimPrompt(content, 25_000),
   );
   log(`Ran ${query}, found ${contents.length} contents`);
 
@@ -98,13 +98,13 @@ async function processSerpResult({
     model: getModel(),
     abortSignal: AbortSignal.timeout(60_000),
     system: systemPrompt(),
-    prompt: `Given the following contents from a SERP search for the query <query>${query}</query>, generate a list of learnings from the contents. Return a maximum of ${numLearnings} learnings, but feel free to return less if the contents are clear. Make sure each learning is unique and not similar to each other. The learnings should be concise and to the point, as detailed and information dense as possible. Make sure to include any entities like people, places, companies, products, things, etc in the learnings, as well as any exact metrics, numbers, or dates. The learnings will be used to research the topic further.\n\n<contents>${contents
-      .map(content => `<content>\n${content}\n</content>`)
-      .join('\n')}</contents>`,
+    prompt: trimPrompt(
+      `Given the following contents from a SERP search for the query <query>${query}</query>, generate a list of learnings from the contents. Return a maximum of ${numLearnings} learnings, but feel free to return less if the contents are clear. Make sure each learning is unique and not similar to each other. The learnings should be concise and to the point, as detailed and information dense as possible. Make sure to include any entities like people, places, companies, products, things, etc in the learnings, as well as any exact metrics, numbers, or dates. The learnings will be used to research the topic further.\n\n<contents>${contents
+        .map(content => `<content>\n${content}\n</content>`)
+        .join('\n')}</contents>`,
+    ),
     schema: z.object({
-      learnings: z
-        .array(z.string())
-        .describe(`List of learnings, max of ${numLearnings}`),
+      learnings: z.array(z.string()).describe(`List of learnings, max of ${numLearnings}`),
       followUpQuestions: z
         .array(z.string())
         .describe(
@@ -126,21 +126,18 @@ export async function writeFinalReport({
   learnings: string[];
   visitedUrls: string[];
 }) {
-  const learningsString = trimPrompt(
-    learnings
-      .map(learning => `<learning>\n${learning}\n</learning>`)
-      .join('\n'),
-    150_000,
-  );
+  const learningsString = learnings
+    .map(learning => `<learning>\n${learning}\n</learning>`)
+    .join('\n');
 
   const res = await generateObject({
     model: getModel(),
     system: systemPrompt(),
-    prompt: `Given the following prompt from the user, write a final report on the topic using the learnings from research. Make it as as detailed as possible, aim for 3 or more pages, include ALL the learnings from research:\n\n<prompt>${prompt}</prompt>\n\nHere are all the learnings from previous research:\n\n<learnings>\n${learningsString}\n</learnings>`,
+    prompt: trimPrompt(
+      `Given the following prompt from the user, write a final report on the topic using the learnings from research. Make it as as detailed as possible, aim for 3 or more pages, include ALL the learnings from research:\n\n<prompt>${prompt}</prompt>\n\nHere are all the learnings from previous research:\n\n<learnings>\n${learningsString}\n</learnings>`,
+    ),
     schema: z.object({
-      reportMarkdown: z
-        .string()
-        .describe('Final report on the topic in Markdown'),
+      reportMarkdown: z.string().describe('Final report on the topic in Markdown'),
     }),
   });
 
@@ -156,23 +153,20 @@ export async function writeFinalAnswer({
   prompt: string;
   learnings: string[];
 }) {
-  const learningsString = trimPrompt(
-    learnings
-      .map(learning => `<learning>\n${learning}\n</learning>`)
-      .join('\n'),
-    150_000,
-  );
+  const learningsString = learnings
+    .map(learning => `<learning>\n${learning}\n</learning>`)
+    .join('\n');
 
   const res = await generateObject({
     model: getModel(),
     system: systemPrompt(),
-    prompt: `Given the following prompt from the user, write a final answer on the topic using the learnings from research. Follow the format specified in the prompt. Do not yap or babble or include any other text than the answer besides the format specified in the prompt. Keep the answer as concise as possible - usually it should be just a few words or maximum a sentence. Try to follow the format specified in the prompt (for example, if the prompt is using Latex, the answer should be in Latex. If the prompt gives multiple answer choices, the answer should be one of the choices).\n\n<prompt>${prompt}</prompt>\n\nHere are all the learnings from research on the topic that you can use to help answer the prompt:\n\n<learnings>\n${learningsString}\n</learnings>`,
+    prompt: trimPrompt(
+      `Given the following prompt from the user, write a final answer on the topic using the learnings from research. Follow the format specified in the prompt. Do not yap or babble or include any other text than the answer besides the format specified in the prompt. Keep the answer as concise as possible - usually it should be just a few words or maximum a sentence. Try to follow the format specified in the prompt (for example, if the prompt is using Latex, the answer should be in Latex. If the prompt gives multiple answer choices, the answer should be one of the choices).\n\n<prompt>${prompt}</prompt>\n\nHere are all the learnings from research on the topic that you can use to help answer the prompt:\n\n<learnings>\n${learningsString}\n</learnings>`,
+    ),
     schema: z.object({
       exactAnswer: z
         .string()
-        .describe(
-          'The final answer, make it short and concise, just the answer, no other text',
-        ),
+        .describe('The final answer, make it short and concise, just the answer, no other text'),
     }),
   });
 
@@ -245,9 +239,7 @@ export async function deepResearch({
           const allUrls = [...visitedUrls, ...newUrls];
 
           if (newDepth > 0) {
-            log(
-              `Researching deeper, breadth: ${newBreadth}, depth: ${newDepth}`,
-            );
+            log(`Researching deeper, breadth: ${newBreadth}, depth: ${newDepth}`);
 
             reportProgress({
               currentDepth: newDepth,
